@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel – HostelMate</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .stat-card { background:#fff;border:1px solid var(--border);border-radius:14px;padding:1.2rem 1.5rem;box-shadow:var(--shadow); }
+    .stat-card .val { font-size:2rem;font-weight:800;color:var(--primary); }
+    .stat-card .lbl { font-size:.8rem;color:var(--muted-txt);font-weight:500; }
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center;padding:1rem; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:540px;max-height:90vh;overflow-y:auto; }
+  </style>
+</head>
+<body>
+<header class="navbar" id="navbar"></header>
+
+<div class="container section">
+  <div class="section-title">⚙ Admin Panel</div>
+  <div class="section-sub">Manage hostels, rooms, bookings and students</div>
+
+  <!-- Stats row -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:2rem" id="admin-stats">
+    <div class="stat-card"><div class="val" id="s-rooms">–</div><div class="lbl">Total Rooms</div></div>
+    <div class="stat-card"><div class="val" id="s-avail">–</div><div class="lbl">Available Rooms</div></div>
+    <div class="stat-card"><div class="val" id="s-books">–</div><div class="lbl">Total Bookings</div></div>
+    <div class="stat-card"><div class="val" id="s-pend">–</div><div class="lbl">Pending Bookings</div></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('rooms')">🏠 Rooms</button>
+    <button class="tab-btn" onclick="switchTab('bookings')">📋 Bookings</button>
+  </div>
+
+  <!-- Rooms Tab -->
+  <div id="tab-rooms">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+      <button class="btn btn-primary" onclick="showRoomForm()">+ Add Room</button>
+    </div>
+
+    <!-- Room Form -->
+    <div class="card" id="room-form" style="display:none;padding:1.5rem;margin-bottom:1.5rem">
+      <h3 style="font-weight:800;margin-bottom:1.2rem" id="form-title">Add Room</h3>
+      <input type="hidden" id="edit-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem">
+        <div class="form-group">
+          <label>Hostel Block</label>
+          <select id="r-hostel">
+            <option value="1">Kilimanjaro Block</option>
+            <option value="2">Serengeti Block</option>
+            <option value="3">Nairobi Block</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Room Number</label><input type="text" id="r-num" placeholder="K401"></div>
+        <div class="form-group">
+          <label>Floor</label>
+          <select id="r-floor">
+            <option value="1">Floor 1</option><option value="2">Floor 2</option>
+            <option value="3">Floor 3</option><option value="4">Floor 4</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Room Type</label>
+          <select id="r-type">
+            <option value="single">Single</option><option value="double">Double</option>
+            <option value="triple">Triple</option><option value="ensuite">En-Suite</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Price per Semester (KES)</label><input type="number" id="r-price" placeholder="18000"></div>
+        <div class="form-group"><label>Capacity (beds)</label><input type="number" id="r-cap" placeholder="1" min="1" max="4"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Amenities (comma-separated)</label><input type="text" id="r-amenities" placeholder="Wi-Fi, Study desk, Wardrobe"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Image URL</label><input type="url" id="r-image"></div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="r-status">
+            <option value="available">Available</option>
+            <option value="fully_booked">Fully Booked</option>
+            <option value="maintenance">Maintenance</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:.6rem;justify-content:flex-end;margin-top:.5rem">
+        <button class="btn btn-ghost" onclick="hideRoomForm()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveRoom()">Save Room</button>
+      </div>
+    </div>
+
+    <div class="card" style="overflow:auto">
+      <table>
+        <thead><tr><th>Room</th><th>Hostel</th><th>Type</th><th>Price/Sem</th><th>Beds</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="rooms-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Bookings Tab -->
+  <div id="tab-bookings" style="display:none">
+    <div class="card" style="overflow:auto">
+      <table>
+        <thead><tr><th>Booking #</th><th>Student</th><th>Room</th><th>Semester</th><th>Amount</th><th>Payment</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="bookings-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+  if (!API.isLoggedIn() || !API.isAdmin()) window.location = '/login.html';
+  renderNavbar('admin');
+
+  function switchTab(tab) {
+    document.getElementById('tab-rooms').style.display    = tab==='rooms'    ? 'block' : 'none';
+    document.getElementById('tab-bookings').style.display = tab==='bookings' ? 'block' : 'none';
+    document.querySelectorAll('.tab-btn').forEach((b,i) =>
+      b.classList.toggle('active', ['rooms','bookings'][i] === tab));
+    if (tab==='rooms')    loadAdminRooms();
+    if (tab==='bookings') loadAdminBookings();
+  }
+
+  // ── Stats ─────────────────────────────────────────────────
+  (async () => {
+    const [{ rooms }, { bookings }] = await Promise.all([
+      API.get('/rooms'), API.get('/bookings/all', true)
+    ]);
+    document.getElementById('s-rooms').textContent = rooms.length;
+    document.getElementById('s-avail').textContent = rooms.filter(r=>r.status==='available').length;
+    document.getElementById('s-books').textContent = bookings.length;
+    document.getElementById('s-pend').textContent  = bookings.filter(b=>b.booking_status==='pending').length;
+  })();
+
+  // ── Rooms ──────────────────────────────────────────────────
+  async function loadAdminRooms() {
+    const tbody = document.getElementById('rooms-tbody');
+    const { rooms } = await API.get('/rooms');
+    tbody.innerHTML = rooms.map(r => `
+      <tr>
+        <td><strong>Room ${r.room_number}</strong><br><small style="color:var(--muted-txt)">Floor ${r.floor}</small></td>
+        <td>${r.hostel_name}</td>
+        <td><span class="type-badge" style="display:inline-block;background:var(--primary-l);color:var(--primary);padding:.15rem .6rem;border-radius:6px;font-size:.72rem;font-weight:600">${roomTypeBadge(r.type)}</span></td>
+        <td>${formatKES(r.price_per_sem)}</td>
+        <td>${r.occupied}/${r.capacity}</td>
+        <td><span class="status-pill pill-${r.status}" style="position:static">${r.status.replace('_',' ')}</span></td>
+        <td>
+          <button class="btn btn-outline btn-sm" onclick="editRoom(${r.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRoom(${r.id})">Del</button>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted-txt)">No rooms yet</td></tr>';
+  }
+
+  function showRoomForm(data=null) {
+    document.getElementById('room-form').style.display='block';
+    document.getElementById('form-title').textContent = data ? 'Edit Room' : 'Add Room';
+    document.getElementById('edit-id').value      = data?.id||'';
+    document.getElementById('r-hostel').value     = data?.hostel_id||'1';
+    document.getElementById('r-num').value        = data?.room_number||'';
+    document.getElementById('r-floor').value      = data?.floor||'1';
+    document.getElementById('r-type').value       = data?.type||'single';
+    document.getElementById('r-price').value      = data?.price_per_sem||'';
+    document.getElementById('r-cap').value        = data?.capacity||'1';
+    document.getElementById('r-amenities').value  = data?.amenities||'';
+    document.getElementById('r-image').value      = data?.image_url||'';
+    document.getElementById('r-status').value     = data?.status||'available';
+  }
+  function hideRoomForm() { document.getElementById('room-form').style.display='none'; }
+
+  async function editRoom(id) {
+    const { room } = await API.get(`/rooms/${id}`);
+    showRoomForm(room);
+  }
+
+  async function saveRoom() {
+    const id = document.getElementById('edit-id').value;
+    const payload = {
+      hostel_id:    document.getElementById('r-hostel').value,
+      room_number:  document.getElementById('r-num').value,
+      floor:        document.getElementById('r-floor').value,
+      type:         document.getElementById('r-type').value,
+      price_per_sem:document.getElementById('r-price').value,
+      capacity:     document.getElementById('r-cap').value,
+      amenities:    document.getElementById('r-amenities').value,
+      image_url:    document.getElementById('r-image').value,
+      status:       document.getElementById('r-status').value,
+    };
+    try {
+      if (id) await API.put(`/rooms/${id}`, payload);
+      else    await API.post('/rooms', payload, true);
+      hideRoomForm(); loadAdminRooms();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  async function deleteRoom(id) {
+    if (!confirm('Delete this room? This cannot be undone.')) return;
+    await API.del(`/rooms/${id}`);
+    loadAdminRooms();
+  }
+
+  // ── Bookings ───────────────────────────────────────────────
+  async function loadAdminBookings() {
+    const tbody = document.getElementById('bookings-tbody');
+    const { bookings } = await API.get('/bookings/all', true);
+    tbody.innerHTML = bookings.map(b => `
+      <tr>
+        <td><strong>#${b.id}</strong><br><small style="color:var(--muted-txt)">${formatDate(b.booked_at)}</small></td>
+        <td>${b.full_name}<br><small style="color:var(--muted-txt)">${b.admission_no}</small></td>
+        <td>${b.hostel_name}<br><small style="color:var(--muted-txt)">Room ${b.room_number}</small></td>
+        <td style="font-size:.8rem">${b.semester}</td>
+        <td>${formatKES(b.amount_due)}</td>
+        <td><span class="badge badge-${b.payment_status}">${b.payment_status}</span></td>
+        <td><span class="badge badge-${b.booking_status}">${b.booking_status}</span></td>
+        <td>
+          <select onchange="updateBooking(${b.id},this.value)" style="padding:.3rem;border-radius:6px;border:1px solid var(--border);font-size:.8rem;font-family:inherit">
+            ${['pending','confirmed','cancelled','completed'].map(s=>
+              `<option value="${s}" ${b.booking_status===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--muted-txt);padding:2rem">No bookings yet</td></tr>';
+  }
+
+  async function updateBooking(id, status) {
+    await API.patch(`/bookings/${id}/status`, { booking_status: status });
+    loadAdminBookings();
+    // Refresh stats
+    const sid = document.getElementById('s-pend');
+    const cur = parseInt(sid.textContent);
+    if (status !== 'pending') sid.textContent = Math.max(0, cur-1);
+  }
+
+  // Init
+  loadAdminRooms();
+</script>
+</body>
+</html>

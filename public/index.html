@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HostelMate – Student Hostel Booking</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="navbar" id="navbar"></header>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <h1>Find Your Perfect <br>Student Room 🏠</h1>
+    <p>Browse available hostel rooms, check amenities, and book your accommodation<br>all in one place — fast, easy, and secure.</p>
+    <div class="cta-group">
+      <a href="/rooms.html" class="btn btn-accent" style="font-size:1rem;padding:.85rem 2rem">Browse Rooms →</a>
+      <a href="/register.html" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.5);font-size:1rem;padding:.85rem 2rem">Create Account</a>
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="container">
+    <div class="inner" id="stats">
+      <div class="stat-item"><div class="val" id="stat-rooms">–</div><div class="lbl">Total Rooms</div></div>
+      <div class="stat-item"><div class="val" id="stat-avail">–</div><div class="lbl">Available Now</div></div>
+      <div class="stat-item"><div class="val" id="stat-hostels">3</div><div class="lbl">Hostel Blocks</div></div>
+      <div class="stat-item"><div class="val" id="stat-types">4</div><div class="lbl">Room Types</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Featured Rooms -->
+<section class="section container">
+  <div class="section-title">Available Rooms</div>
+  <div class="section-sub">Showing available rooms across all hostel blocks</div>
+  <div class="rooms-grid" id="rooms-grid"><div class="spinner"></div></div>
+  <div style="text-align:center;margin-top:1.5rem">
+    <a href="/rooms.html" class="btn btn-outline">View All Rooms →</a>
+  </div>
+</section>
+
+<!-- How it works -->
+<section style="background:#fff;padding:3rem 0;border-top:1px solid var(--border)">
+  <div class="container">
+    <div class="section-title" style="text-align:center">How HostelMate Works</div>
+    <div class="section-sub" style="text-align:center">3 simple steps to secure your room</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2rem;margin-top:2rem">
+      <div style="text-align:center;padding:1.5rem">
+        <div style="font-size:2.5rem;margin-bottom:.8rem">🔍</div>
+        <div style="font-weight:700;margin-bottom:.4rem">1. Browse Rooms</div>
+        <p style="color:var(--muted-txt);font-size:.875rem;line-height:1.6">Filter by type, hostel block, and price. View amenities and bed availability.</p>
+      </div>
+      <div style="text-align:center;padding:1.5rem">
+        <div style="font-size:2.5rem;margin-bottom:.8rem">📝</div>
+        <div style="font-weight:700;margin-bottom:.4rem">2. Submit Booking</div>
+        <p style="color:var(--muted-txt);font-size:.875rem;line-height:1.6">Select your semester, check-in date, and submit your booking request.</p>
+      </div>
+      <div style="text-align:center;padding:1.5rem">
+        <div style="font-size:2.5rem;margin-bottom:.8rem">✅</div>
+        <div style="font-weight:700;margin-bottom:.4rem">3. Move In</div>
+        <p style="color:var(--muted-txt);font-size:.875rem;line-height:1.6">Admin confirms your booking. Pay and move into your room on check-in day.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <p>HostelMate &copy; 2024 — BIT3208 Advanced Web Design &amp; Development | Lec Nyoro</p>
+  <p style="margin-top:.3rem;font-size:.75rem">Stack: Node.js + Express + MySQL | JWT Auth (localStorage) — No Cookies</p>
+</footer>
+
+<script src="/js/api.js"></script>
+<script>
+  renderNavbar('home');
+
+  (async () => {
+    try {
+      const { rooms } = await API.get('/rooms?status=available');
+      document.getElementById('stat-rooms').textContent = rooms.length;
+      document.getElementById('stat-avail').textContent = rooms.filter(r => r.status === 'available').length;
+
+      const grid = document.getElementById('rooms-grid');
+      const featured = rooms.slice(0, 6);
+      if (!featured.length) {
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">🏠</div><p>No rooms available at the moment.</p></div>';
+        return;
+      }
+      grid.innerHTML = featured.map(r => roomCard(r)).join('');
+    } catch (e) {
+      document.getElementById('rooms-grid').innerHTML = `<p style="color:red;grid-column:1/-1">Error: ${e.message}</p>`;
+    }
+  })();
+
+  function roomCard(r) {
+    const beds = r.capacity - r.occupied;
+    return `
+      <div class="room-card">
+        <div class="thumb">
+          <img src="${r.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500'}" alt="Room ${r.room_number}" loading="lazy">
+          <span class="status-pill pill-${r.status}">${r.status === 'available' ? '✓ Available' : r.status.replace('_',' ')}</span>
+        </div>
+        <div class="body">
+          <div class="hostel-tag">🏢 ${r.hostel_name}</div>
+          <div class="room-no">Room ${r.room_number} — Floor ${r.floor}</div>
+          <div class="type-badge">${roomTypeBadge(r.type)}</div>
+          <div class="amenities">${(r.amenities||'').split(',').slice(0,3).join(' · ')}</div>
+          <div class="price-row">
+            <span class="price">${formatKES(r.price_per_sem)}<span style="font-size:.7rem;font-weight:500;color:var(--muted-txt)">/sem</span></span>
+            <span class="beds" style="color:${beds>0?'var(--success)':'var(--danger)'}">${beds} bed${beds!==1?'s':''} free</span>
+          </div>
+          <a href="/rooms.html?book=${r.id}" class="btn btn-primary btn-full btn-sm"
+             ${r.status!=='available'?'style="opacity:.5;pointer-events:none"':''}>
+            ${r.status==='available'?'Book This Room':'Not Available'}
+          </a>
+        </div>
+      </div>`;
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Bookings – HostelMate</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="navbar" id="navbar"></header>
+
+<div class="container section">
+  <div class="section-title">My Bookings 📋</div>
+  <div class="section-sub">Track your room bookings, confirmations and payments</div>
+  <div id="bookings-container"><div class="spinner"></div></div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+  if (!API.isLoggedIn()) window.location = '/login.html';
+  renderNavbar('bookings');
+
+  async function load() {
+    const c = document.getElementById('bookings-container');
+    try {
+      const { bookings } = await API.get('/bookings/mine', true);
+      if (!bookings.length) {
+        c.innerHTML = `<div class="empty-state">
+          <div class="icon">📋</div>
+          <p>You haven't made any bookings yet.</p>
+          <a href="/rooms.html" class="btn btn-primary" style="margin-top:1rem;text-decoration:none">Browse Rooms</a>
+        </div>`;
+        return;
+      }
+      c.innerHTML = bookings.map(b => `
+        <div class="booking-card">
+          <img src="${b.image_url||'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=300'}" alt="Room">
+          <div class="meta">
+            <div class="top">
+              <div>
+                <strong>${b.hostel_name} — Room ${b.room_number}</strong>
+                <span style="font-size:.78rem;color:var(--muted-txt);margin-left:.5rem">${roomTypeBadge(b.room_type)} · Floor ${b.floor}</span>
+              </div>
+              <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+                <span class="badge badge-${b.booking_status}">${b.booking_status.toUpperCase()}</span>
+                <span class="badge badge-${b.payment_status}">${b.payment_status.toUpperCase()}</span>
+              </div>
+            </div>
+            <div style="font-size:.82rem;color:var(--muted-txt);margin-bottom:.5rem;display:flex;gap:1.2rem;flex-wrap:wrap">
+              <span>📅 ${b.semester}</span>
+              <span>🔑 Check-in: ${formatDate(b.check_in_date)}</span>
+              <span>🔓 Check-out: ${formatDate(b.check_out_date)}</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+              <span style="font-weight:700;color:var(--primary);font-size:1rem">${formatKES(b.amount_due)}</span>
+              <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                ${b.payment_status !== 'paid' && b.booking_status !== 'cancelled' ? `
+                  <button class="btn btn-accent btn-sm" onclick="pay(${b.id},${b.amount_due})">💳 Pay via M-Pesa</button>
+                ` : ''}
+                ${b.booking_status === 'pending' ? `
+                  <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)"
+                    onclick="cancel(${b.id})">Cancel</button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      c.innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
+    }
+  }
+
+  async function pay(bookingId, amount) {
+    const ref = 'MPE' + Math.random().toString(36).substring(2,10).toUpperCase();
+    if (!confirm(`Simulate M-Pesa payment of ${formatKES(amount)}?\nReference: ${ref}`)) return;
+    try {
+      const { message, payment_status } = await API.post(`/bookings/${bookingId}/pay`,
+        { amount, method: 'mpesa', reference: ref }, true);
+      alert(`✅ ${message}\nStatus: ${payment_status}\nRef: ${ref}`);
+      load();
+    } catch (e) { alert('❌ ' + e.message); }
+  }
+
+  async function cancel(bookingId) {
+    if (!confirm('Are you sure you want to cancel this booking?')) return;
+    try {
+      await API.del(`/bookings/${bookingId}`, true);
+      load();
+    } catch (e) { alert('❌ ' + e.message); }
+  }
+
+  load();
+</script>
+</body>
+</html>

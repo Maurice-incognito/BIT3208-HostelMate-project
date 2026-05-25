@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Browse Rooms – HostelMate</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center;padding:1rem; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:520px;max-height:90vh;overflow-y:auto; }
+    .modal h3 { font-size:1.2rem;font-weight:800;margin-bottom:1.2rem; }
+  </style>
+</head>
+<body>
+<header class="navbar" id="navbar"></header>
+
+<div class="container section">
+  <div class="section-title">Browse Rooms 🏠</div>
+  <div class="section-sub">Filter and find the perfect room for your semester</div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <select id="f-hostel" onchange="loadRooms()">
+      <option value="">All Hostels</option>
+    </select>
+    <select id="f-type" onchange="loadRooms()">
+      <option value="">All Types</option>
+      <option value="single">Single</option>
+      <option value="double">Double</option>
+      <option value="triple">Triple</option>
+      <option value="ensuite">En-Suite</option>
+    </select>
+    <select id="f-status" onchange="loadRooms()">
+      <option value="available">Available Only</option>
+      <option value="">All Statuses</option>
+    </select>
+    <input type="text" id="f-search" placeholder="🔍 Search room / hostel…" oninput="debounce(loadRooms, 400)()" style="min-width:180px">
+  </div>
+
+  <div class="rooms-grid" id="rooms-grid"><div class="spinner"></div></div>
+</div>
+
+<!-- Booking Modal -->
+<div class="modal-overlay" id="booking-modal">
+  <div class="modal">
+    <h3>📝 Book a Room</h3>
+    <div id="modal-alert"></div>
+
+    <div style="background:var(--bg);border-radius:10px;padding:.8rem 1rem;margin-bottom:1.2rem;font-size:.875rem" id="modal-room-info"></div>
+
+    <div class="form-group">
+      <label>Semester</label>
+      <select id="b-semester">
+        <option value="Semester 1 2024/2025">Semester 1 2024/2025</option>
+        <option value="Semester 2 2024/2025">Semester 2 2024/2025</option>
+        <option value="Semester 1 2025/2026">Semester 1 2025/2026</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem">
+      <div class="form-group">
+        <label>Check-In Date</label>
+        <input type="date" id="b-checkin">
+      </div>
+      <div class="form-group">
+        <label>Check-Out Date</label>
+        <input type="date" id="b-checkout">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Additional Notes (optional)</label>
+      <textarea id="b-notes" rows="2" placeholder="Any special requirements…"></textarea>
+    </div>
+
+    <div style="display:flex;gap:.8rem;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="submit-btn" onclick="submitBooking()">Submit Booking</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+  renderNavbar('rooms');
+  let selectedRoomId = null;
+
+  // Load hostels for filter
+  (async () => {
+    const { hostels } = await API.get('/rooms/meta/hostels');
+    const sel = document.getElementById('f-hostel');
+    hostels.forEach(h => sel.innerHTML += `<option value="${h.id}">${h.name}</option>`);
+  })();
+
+  function debounce(fn, ms) {
+    let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+  }
+
+  async function loadRooms() {
+    const grid = document.getElementById('rooms-grid');
+    grid.innerHTML = '<div class="spinner"></div>';
+    let url = '/rooms?';
+    const hostel = document.getElementById('f-hostel').value;
+    const type   = document.getElementById('f-type').value;
+    const status = document.getElementById('f-status').value;
+    const search = document.getElementById('f-search').value.trim();
+    if (hostel) url += `hostel_id=${hostel}&`;
+    if (type)   url += `type=${type}&`;
+    if (status) url += `status=${status}&`;
+    if (search) url += `search=${encodeURIComponent(search)}&`;
+
+    try {
+      const { rooms } = await API.get(url);
+      if (!rooms.length) {
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">🔍</div><p>No rooms match your filters.</p></div>';
+        return;
+      }
+      grid.innerHTML = rooms.map(r => {
+        const beds = r.capacity - r.occupied;
+        return `
+        <div class="room-card">
+          <div class="thumb">
+            <img src="${r.image_url||'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=500'}" alt="Room ${r.room_number}" loading="lazy">
+            <span class="status-pill pill-${r.status}">${r.status==='available'?'✓ Available':r.status.replace('_',' ')}</span>
+          </div>
+          <div class="body">
+            <div class="hostel-tag">🏢 ${r.hostel_name} &nbsp;·&nbsp; ${r.gender==='male'?'♂ Male':r.gender==='female'?'♀ Female':'⚥ Mixed'}</div>
+            <div class="room-no">Room ${r.room_number} — Floor ${r.floor}</div>
+            <div class="type-badge">${roomTypeBadge(r.type)}</div>
+            <div class="amenities">${(r.amenities||'').split(',').map(a=>`• ${a.trim()}`).join('  ')}</div>
+            <div class="price-row">
+              <span class="price">${formatKES(r.price_per_sem)}<span style="font-size:.7rem;font-weight:500;color:var(--muted-txt)">/sem</span></span>
+              <span class="beds" style="color:${beds>0?'var(--success)':'var(--danger)'}">
+                ${r.capacity} capacity · ${beds} free
+              </span>
+            </div>
+            <button class="btn btn-primary btn-full btn-sm"
+              onclick="openBooking(${r.id},'${r.room_number}','${r.hostel_name}','${r.type}',${r.price_per_sem})"
+              ${r.status!=='available'?'disabled':''}>
+              ${r.status==='available'?'📝 Book Now':'Not Available'}
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Auto-open booking if URL has ?book=id
+      const params = new URLSearchParams(location.search);
+      const bookId = params.get('book');
+      if (bookId) {
+        const room = rooms.find(r => r.id == bookId);
+        if (room) openBooking(room.id, room.room_number, room.hostel_name, room.type, room.price_per_sem);
+      }
+    } catch (e) {
+      grid.innerHTML = `<p style="color:red;grid-column:1/-1">Error: ${e.message}</p>`;
+    }
+  }
+
+  function openBooking(id, roomNo, hostel, type, price) {
+    if (!API.isLoggedIn()) { window.location = '/login.html'; return; }
+    selectedRoomId = id;
+    document.getElementById('modal-room-info').innerHTML =
+      `<strong>${hostel} — Room ${roomNo}</strong> &nbsp;·&nbsp; ${roomTypeBadge(type)} &nbsp;·&nbsp; <strong style="color:var(--primary)">${formatKES(price)}/sem</strong>`;
+    document.getElementById('modal-alert').innerHTML = '';
+
+    // Default dates
+    const now = new Date();
+    const end = new Date(now); end.setMonth(end.getMonth() + 4);
+    document.getElementById('b-checkin').value  = now.toISOString().split('T')[0];
+    document.getElementById('b-checkout').value = end.toISOString().split('T')[0];
+
+    document.getElementById('booking-modal').classList.add('open');
+  }
+
+  function closeModal() { document.getElementById('booking-modal').classList.remove('open'); }
+
+  async function submitBooking() {
+    const semester      = document.getElementById('b-semester').value;
+    const check_in_date = document.getElementById('b-checkin').value;
+    const check_out_date= document.getElementById('b-checkout').value;
+    const notes         = document.getElementById('b-notes').value;
+    const ab = document.getElementById('modal-alert');
+    const btn = document.getElementById('submit-btn');
+
+    if (!check_in_date || !check_out_date) return showAlert(ab, 'Please select check-in and check-out dates.');
+    if (check_out_date <= check_in_date)   return showAlert(ab, 'Check-out date must be after check-in.');
+
+    btn.disabled = true; btn.textContent = 'Submitting…';
+    try {
+      const data = await API.post('/bookings', {
+        room_id: selectedRoomId, semester,
+        academic_year: semester.split(' ').pop(),
+        check_in_date, check_out_date, notes
+      }, true);
+      closeModal();
+      alert(`✅ ${data.message}\nBooking ID: #${data.booking_id}\n\nView it in My Bookings.`);
+      loadRooms();
+    } catch (e) {
+      showAlert(ab, e.message);
+      btn.disabled = false; btn.textContent = 'Submit Booking';
+    }
+  }
+
+  // Close modal on overlay click
+  document.getElementById('booking-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  loadRooms();
+</script>
+</body>
+</html>
