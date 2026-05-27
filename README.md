@@ -1,7 +1,7 @@
 # 🏠 HostelMate – Student Hostel Room Booking System
 **BIT3208 Advanced Web Design & Development — CAT 1**  
 **Lecturer:** Lec Nyoro
-
+Maurice Ochieng
 ---
 
 ## Tech Stack
