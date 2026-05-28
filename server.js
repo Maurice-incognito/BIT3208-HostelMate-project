@@ -1,4 +1,7 @@
 // server.js — HostelMate BIT3208
+// Week 4: REST API routes completed — auth, rooms, bookings
+// Role-based middleware: admin vs student
+// Routes: /api/auth /api/rooms /api/bookings
 require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
