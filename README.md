@@ -111,3 +111,5 @@ hostelmate/
 - [x] Role-based access (admin vs student)
 - [x] Secure password storage (bcrypt 10 rounds)
 - [x] Database transactions (booking uses BEGIN/COMMIT)
+
+GitHub: https://github.com/Maurice-incognito/BIT3208-HostelMate-project
